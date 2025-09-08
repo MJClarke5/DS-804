@@ -1,6 +1,8 @@
 # DS-804
 Fall 2023 Term 2 Project - AAPL Stock Sentiment Text Analysis
 
+Please note - the Reddit Comments file could not be included in the repository due to being 125mb
+
 Project Details:
 
 Overview
