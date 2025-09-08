@@ -1,0 +1,217 @@
+---
+title: "DS 804 Project"
+author: "Matthew"
+date: "2023-12-12"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+#Loading all libraries needed
+install.packages("tm")
+install.packages("wordcloud")
+install.packages("tidytext")
+install.packages("ggrepel")
+library(readxl)
+library(tidyverse)
+library(tidyr)
+library(tm)
+library(wordcloud)
+library(RColorBrewer)
+library(dplyr)
+library(tidytext)
+library(ggrepel)
+```
+
+```{r}
+#Reading in data
+comments = read_excel("D:/Fall 2023 Term 2/DS 804/Project/AAPL Returns/comments.xlsx")
+posts = read_excel("D:/Fall 2023 Term 2/DS 804/Project/AAPL Returns/posts.xlsx")
+print("POSTS: ")
+glimpse(posts)
+print("COMMENTS: ")
+glimpse(comments)
+#Find the number of missing values in all columns, only show columns with more than 0 missing values
+columns_with_missing_values_posts = posts %>%
+  summarise(across(everything(), ~sum(is.na(.)))) %>% #count how many missing values across all columns
+  pivot_longer(cols=everything(), names_to="Column", values_to="MissingValues") %>% #
+  filter(MissingValues > 0)
+
+summary(posts)
+
+#Find proportion of missing values for each column by dividing number of missing values by total
+proportion_missing_posts = columns_with_missing_values_posts %>%
+  mutate(ProportionMissing = MissingValues/nrow(posts) *100)
+
+#Display the proportion of missing values
+proportion_missing_posts
+#Find the number of missing values in all columns, only show columns with more than 0 missing values
+columns_with_missing_values_comments = comments %>%
+  summarise(across(everything(), ~sum(is.na(.)))) %>% #count how many missing values across all columns
+  pivot_longer(cols=everything(), names_to="Column", values_to="MissingValues") %>% #
+  filter(MissingValues > 0)
+
+#Find proportion of missing values for each column by dividing number of missing values by total
+proportion_missing_comments = columns_with_missing_values_comments %>%
+  mutate(ProportionMissing = MissingValues/nrow(comments) *100)
+
+#Display the proportion of missing values
+proportion_missing_comments
+#Convert all text to lowercase for analysis
+posts = posts %>%
+  mutate(selftext = tolower(selftext)) %>%
+  mutate(title = tolower(title))
+
+comments = comments %>%
+  mutate(body = tolower(body))
+# Check for duplicate rows
+duplicates_posts = posts %>%
+  distinct() %>%
+  filter(duplicated(posts))
+
+# Print the number of duplicate rows
+print(nrow(duplicates_posts))
+# Check for duplicate rows
+duplicates_comments = comments %>%
+  distinct() %>%
+  filter(duplicated(comments))
+
+# Print the number of duplicate rows
+print(nrow(duplicates_comments))
+
+#add length of comment
+comments = comments %>%
+  mutate(comment_length = sapply(strsplit(body, " "), length))
+#Top 10 Subreddit with the most posts
+subreddit_posts = posts %>%
+  group_by(subreddit.name) %>%
+  summarise(num_posts = n_distinct(id)) %>%
+  arrange(desc(num_posts)) %>%
+  slice_head(n=10)
+
+subreddit_posts
+
+
+```
+
+```{r}
+# Prepare the text data - comments
+text_data <- comments %>%
+  select(body)
+# Tokenize the text and match against the sentiment lexicon
+sentiment_data <- text_data %>%
+  unnest_tokens(word, body) %>%
+  inner_join(get_sentiments("bing"))
+
+#
+#text_data %>%
+#  unnest_tokens(word, body)
+#comment_word <- text_data %>%
+#  unnest_tokens(word, body)
+
+# Compute the sentiment score
+sentiment_score <- sentiment_data %>%
+  count(sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment_score = positive - negative)
+
+sentiment_score
+
+# Count the number of positive and negative words
+sentiment_count <- sentiment_data %>%
+  count(sentiment)
+sentiment_count
+# Create a bar chart
+ggplot(sentiment_count, aes(x = sentiment, y = length(comments$sentiment), fill = sentiment))+
+  geom_bar(stat = "identity")+
+  ylim(0, 600000)+
+  labs(title = "Sentiment Analysis of Reddit Comments",
+    x = "Sentiment",
+    y = "Count")+
+  scale_fill_manual(values = c("positive" = "blue", "negative" = "red"))+
+  theme_minimal()
+
+#Text Analysis for Posts
+# Prepare the text data 
+post_data <- posts %>%
+  select(title, selftext)
+# Tokenize the text and match against the sentiment lexicon
+sentiment_post <- post_data %>%
+  unnest_tokens(word, title) %>%
+  inner_join(get_sentiments("bing"))
+
+#
+post_data %>%
+  unnest_tokens(word, title)
+post_word <- post_data %>%
+  unnest_tokens(word, title)
+
+# Compute the sentiment score
+sentiment_score_post <- sentiment_post %>%
+  count(sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment_score = positive - negative)
+
+sentiment_score
+
+# Count the number of positive and negative words
+sentiment_count_post <- sentiment_post %>%
+  count(sentiment)
+sentiment_count_post
+# Create a bar chart
+ggplot(sentiment_count_post, aes(x = sentiment, y = sum(posts$score), fill = sentiment))+
+  geom_bar(stat = "identity")+
+  labs(title = "Sentiment Analysis of Reddit Posts",
+    x = "Sentiment Score",
+    y = "Count")+
+  scale_fill_manual(values = c("positive" = "blue", "negative" = "red"))+
+  theme_minimal()
+
+# Summing the Total Appearance of each word in the comments, arranging in ascending order, and getting the top 3
+top_comment_word_totals <- text_data %>%
+  group_by(body) %>%
+  summarise(TotalWordCount = sum(text_data, na.rm = TRUE)) %>%
+  arrange(TotalWordCount) %>%
+  slice_head(n = 3)
+
+
+# View the top 3 states with the most records breached
+print(top_comment_word_totals)
+```
+
+```{r}
+set.seed(1234)
+
+# randomly select 10,000 rows from the dataset
+row_indices <- sample(nrow(comments), size = 10000, replace = FALSE)
+comments_data <- comments[row_indices, , drop = FALSE]
+#data1 <- data.frame(comments) %>%
+#  select(sentiment, subreddit.name, score)
+mlr<-lm(sentiment~comment_length+factor(subreddit.name),data = comments_data)
+summary(mlr)
+
+row_indices_post <- sample(nrow(posts), size = 10000, replace = FALSE)
+posts_data <- posts[row_indices, , drop = FALSE]
+#data1 <- data.frame(comments) %>%
+#  select(sentiment, subreddit.name, score)
+mlr_post<-lm(score~factor(subreddit.name),data = posts_data)
+summary(mlr_post)
+```
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
